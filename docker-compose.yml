@@ -1,0 +1,174 @@
+# ============================================================
+# CLMStore — Docker Compose (Development)
+# ============================================================
+# Copy .env.example to .env and fill in your values before running.
+# All sensitive values (passwords, API keys) MUST come from .env — never hardcoded here.
+# ============================================================
+version: "3.9"
+
+services:
+  # ── FastAPI Application ─────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    image: clmstore-api:dev
+    container_name: clmstore_api
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload --log-level debug
+    volumes:
+      - .:/app
+      - uploads_data:/app/uploads
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clmstore}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-clmstore_db}
+      - REDIS_URL=redis://redis:6379/0
+      - S3_ENDPOINT_URL=http://minio:9000
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - clmstore_net
+    restart: unless-stopped
+
+  # ── PostgreSQL Database ─────────────────────────────────────
+  postgres:
+    image: postgres:17-alpine
+    container_name: clmstore_postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-clmstore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB:-clmstore_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    networks:
+      - clmstore_net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-clmstore} -d ${POSTGRES_DB:-clmstore_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── Redis (Cache + Rate Limiting + Task Queue) ─────────────
+  redis:
+    image: redis:7-alpine
+    container_name: clmstore_redis
+    command: redis-server --appendonly yes --requirepass ""
+    volumes:
+      - redis_data:/data
+    ports:
+      - "6379:6379"
+    networks:
+      - clmstore_net
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ── MinIO (S3-compatible Object Storage) ───────────────────
+  minio:
+    image: minio/minio:latest
+    container_name: clmstore_minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${S3_ACCESS_KEY:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${S3_SECRET_KEY}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    networks:
+      - clmstore_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    restart: unless-stopped
+
+  # ── Celery Worker (Background Tasks) ───────────────────────
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: clmstore_celery
+    command: celery -A app.core.celery_app worker --loglevel=info --concurrency=4
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clmstore}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-clmstore_db}
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - clmstore_net
+    restart: unless-stopped
+
+  # ── Celery Beat (Scheduled Tasks) ──────────────────────────
+  celery_beat:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    container_name: clmstore_beat
+    command: celery -A app.core.celery_app beat --loglevel=info
+    volumes:
+      - .:/app
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://${POSTGRES_USER:-clmstore}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-clmstore_db}
+      - REDIS_URL=redis://redis:6379/0
+      - PYTHONPATH=/app
+    depends_on:
+      - redis
+    networks:
+      - clmstore_net
+    restart: unless-stopped
+
+  # ── pgAdmin (Database Admin UI — optional) ─────────────────
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: clmstore_pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: ${PGADMIN_EMAIL:-admin@clmstore.sl}
+      PGADMIN_DEFAULT_PASSWORD: ${PGADMIN_PASSWORD}
+      PGADMIN_CONFIG_SERVER_MODE: "False"
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - clmstore_net
+    restart: unless-stopped
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:
+  uploads_data:
+
+networks:
+  clmstore_net:
+    driver: bridge

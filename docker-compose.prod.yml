@@ -1,0 +1,110 @@
+# ============================================================
+# CLMStore — Docker Compose (Production)
+# Usage: docker compose -f docker-compose.prod.yml up -d
+# ============================================================
+version: "3.9"
+
+services:
+  # ── FastAPI Application ─────────────────────────────────────
+  api:
+    image: clmstore-api:${VERSION:-latest}
+    build:
+      context: .
+      dockerfile: Dockerfile
+    deploy:
+      replicas: 2
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.5"
+          memory: 256M
+    volumes:
+      - uploads_data:/app/uploads
+    env_file:
+      - .env.production
+    environment:
+      - ENVIRONMENT=production
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    networks:
+      - clmstore_net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/api/v1/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ── Nginx Reverse Proxy + SSL ───────────────────────────────
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: clmstore_nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./nginx/ssl:/etc/nginx/ssl:ro
+      - uploads_data:/var/www/uploads:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      - api
+    networks:
+      - clmstore_net
+    restart: always
+
+  # ── Certbot — SSL certificate renewal ──────────────────────
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - ./nginx/ssl:/etc/letsencrypt/live/api.clmstore.sl
+      - certbot_www:/var/www/certbot
+    entrypoint: /bin/sh -c "trap exit TERM; while :; do sleep 12h & wait $${!}; certbot renew --webroot -w /var/www/certbot --quiet; nginx -s reload 2>/dev/null || true; done"
+    networks:
+      - clmstore_net
+
+  # ── PostgreSQL ──────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - clmstore_net
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ── Redis ───────────────────────────────────────────────────
+  redis:
+    image: redis:7-alpine
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - clmstore_net
+    restart: always
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+  certbot_www:
+
+networks:
+  clmstore_net:
+    driver: bridge

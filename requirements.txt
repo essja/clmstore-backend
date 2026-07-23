@@ -1,0 +1,73 @@
+# ==============================================================
+# CLMStore — Production Dependencies
+# ==============================================================
+
+# Core Framework
+fastapi>=0.111.0
+uvicorn[standard]>=0.30.1
+python-multipart>=0.0.9
+
+# Database
+sqlalchemy>=2.0.30
+asyncpg>=0.29.0
+alembic>=1.13.1
+
+# Pydantic
+pydantic>=2.7.1
+pydantic-settings>=2.3.0
+email-validator>=2.1.1
+
+# Authentication & Security
+python-jose[cryptography]>=3.3.0
+passlib[bcrypt]>=1.7.4
+pyotp>=2.9.0
+cryptography>=42.0.8
+
+# File Handling
+aiofiles>=23.2.1
+pillow>=10.3.0
+python-magic>=0.4.27; sys_platform != 'win32'
+python-magic-bin>=0.4.14; sys_platform == 'win32'
+
+# HTTP Client
+httpx>=0.27.0
+
+# Caching & Task Queue
+redis>=5.0.4
+celery>=5.4.0
+
+# Rate Limiting
+slowapi>=0.1.9
+limits>=3.13.0
+
+# Logging
+structlog>=24.2.0
+
+# Cloud Storage (S3-compatible / MinIO)
+boto3>=1.34.127
+
+# SMS — Africa's Talking
+africastalking>=1.2.6
+
+# Push Notifications — OneSignal (via REST API, no SDK needed)
+# httpx is already listed above and is used for OneSignal calls
+
+# Payment
+stripe>=9.11.0
+
+# Geocoding / Location
+geopy>=2.4.1
+shapely>=2.0.4
+
+# Utilities
+python-slugify>=8.0.4
+qrcode[pil]>=7.4.2
+reportlab>=4.2.0
+python-dateutil>=2.9.0.post0
+pytz>=2024.1
+
+# WebSockets (for live rider tracking)
+websockets>=12.0
+
+# AI / Vision — menu photo extraction
+anthropic>=0.40.0
