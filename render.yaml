@@ -1,0 +1,23 @@
+services:
+  - type: web
+    name: clmstore-backend
+    env: docker
+    plan: free
+    region: oregon
+    envVars:
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        value: "1312294745290531"
+      - key: WHATSAPP_ACCESS_TOKEN
+        value: "EAATvb0kQ9zUBSNGIjcYtsveS0djhXMtXyZADvbvcmwZAyLTi5UMHs3h5DfWAenRiZBZAHxZAWHUwKmBvli7QmbGE1oHmnQtS3GBnooZCc1vYEYb8okfNheiwPeoc2B7p2OG0oq3v2IXfEdkkvBje1oKA3jvMROWFmOqzjTX8TPqFodV0UZBBNE3TDeHMym8mj5oRAZDZD"
+      - key: WHATSAPP_VERIFY_TOKEN
+        value: "clmstore_wa_secure_verify_token_2026"
+      - key: WHATSAPP_BUSINESS_ACCOUNT_ID
+        value: "1714085459722326"
+      - key: SECRET_KEY
+        value: "efa69a12372715c88fd14ea405e1a7325a9cc3c07d64b82fdf7a74c6b18741dd"
+      - key: JWT_SECRET_KEY
+        value: "5154b04f14e28ce6199daa920f7eeecc2805d9807d5c30d3e4637816835e0054"
+      - key: ENVIRONMENT
+        value: "production"
+      - key: DEBUG
+        value: "false"
